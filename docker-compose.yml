@@ -1,0 +1,20 @@
+
+services:
+  frontend:
+    image: ${DOCKERHUB_USER:?Set DOCKERHUB_USER}/healthcare-frontend:${IMAGE_TAG:-latest}
+    container_name: healthcare-frontend
+    ports:
+      - "80:80"
+    restart: unless-stopped
+
+  backend:
+    image: alpine:3.20
+    container_name: healthcare-backend-placeholder
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    restart: unless-stopped
+
+  database:
+    image: alpine:3.20
+    container_name: healthcare-database-placeholder
+    command: ["sh", "-c", "while true; do sleep 3600; done"]
+    restart: unless-stopped

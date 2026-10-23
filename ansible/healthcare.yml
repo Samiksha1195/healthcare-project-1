@@ -1,0 +1,134 @@
+---
+- name: Configure DevOps Control Node
+  hosts: control
+  become: true
+
+  tasks:
+    - name: Install Java, Git and Docker
+      ansible.builtin.dnf:
+        name:
+          - java-21-amazon-corretto
+          - git
+          - docker
+        state: present
+
+    - name: Start Docker
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ec2-user to Docker group
+      ansible.builtin.user:
+        name: ec2-user
+        groups: docker
+        append: true
+
+    - name: Download Jenkins repository configuration
+      ansible.builtin.get_url:
+        url: https://pkg.jenkins.io/redhat-stable/jenkins.repo
+        dest: /etc/yum.repos.d/jenkins.repo
+        mode: "0644"
+
+    - name: Import Jenkins repository signing key
+      ansible.builtin.rpm_key:
+        state: present
+        key: https://pkg.jenkins.io/redhat-stable/jenkins.io-2023.key
+
+    - name: Install Jenkins
+      ansible.builtin.dnf:
+        name: jenkins
+        state: present
+        update_cache: true
+
+    - name: Allow Jenkins to use Docker
+      ansible.builtin.user:
+        name: jenkins
+        groups: docker
+        append: true
+
+    - name: Enable and start Jenkins
+      ansible.builtin.service:
+        name: jenkins
+        state: started
+        enabled: true
+
+
+- name: Configure Application Server
+  hosts: application
+  become: true
+
+  tasks:
+    - name: Install Docker and Git
+      ansible.builtin.dnf:
+        name:
+          - docker
+          - git
+        state: present
+
+    - name: Start Docker service
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: true
+
+    - name: Add ec2-user to Docker group
+      ansible.builtin.user:
+        name: ec2-user
+        groups: docker
+        append: true
+
+    - name: Create Docker CLI plugin directory
+      ansible.builtin.file:
+        path: /usr/local/lib/docker/cli-plugins
+        state: directory
+        mode: "0755"
+
+    - name: Install Docker Compose v2
+      ansible.builtin.get_url:
+        url: https://github.com/docker/compose/releases/latest/download/docker-compose-linux-x86_64
+        dest: /usr/local/lib/docker/cli-plugins/docker-compose
+        mode: "0755"
+
+    - name: Create application deployment directory
+      ansible.builtin.file:
+        path: /opt/healthcare
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: "0755"
+
+
+- name: Configure Database Server
+  hosts: database
+  become: true
+
+  tasks:
+    - name: Install MariaDB Server
+      ansible.builtin.dnf:
+        name: mariadb105-server
+        state: present
+
+    - name: Start and enable database service
+      ansible.builtin.service:
+        name: mariadb
+        state: started
+        enabled: true
+
+    - name: Create healthcare database and application user
+      ansible.builtin.shell: |
+        mysql <<'SQL'
+        CREATE DATABASE IF NOT EXISTS healthcare;
+        CREATE USER IF NOT EXISTS 'healthcare_user'@'10.0.1.%'
+          IDENTIFIED BY 'samiksha9822';
+        ALTER USER 'healthcare_user'@'10.0.1.%'
+          IDENTIFIED BY 'samiksha9822';
+        GRANT ALL PRIVILEGES ON healthcare.*
+          TO 'healthcare_user'@'10.0.1.%';
+        FLUSH PRIVILEGES;
+        SQL
+      args:
+        executable: /bin/bash
+      no_log: true
+      changed_when: true
+

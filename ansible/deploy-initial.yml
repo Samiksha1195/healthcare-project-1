@@ -1,0 +1,29 @@
+---
+- name: Initial Healthcare application deployment
+  hosts: application
+  become: true
+
+  tasks:
+    - name: Ensure application directory exists
+      ansible.builtin.file:
+        path: /opt/healthcare
+        state: directory
+        owner: ec2-user
+        group: ec2-user
+        mode: "0755"
+
+    - name: Copy Compose configuration
+      ansible.builtin.copy:
+        src: ../docker-compose.yml
+        dest: /opt/healthcare/docker-compose.yml
+        owner: ec2-user
+        group: ec2-user
+        mode: "0644"
+
+    - name: Copy sample HTML
+      ansible.builtin.copy:
+        src: ../index.html
+        dest: /opt/healthcare/index.html
+        owner: ec2-user
+        group: ec2-user
+        mode: "0644"
