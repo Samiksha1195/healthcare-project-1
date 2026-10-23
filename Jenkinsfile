@@ -7,7 +7,7 @@ pipeline {
     }
 
     environment {
-        APP_HOST  = '10.0.1.5'
+        APP_HOST   = '10.0.1.5'
         DEPLOY_DIR = '/opt/healthcare'
         IMAGE_NAME = 'healthcare-frontend'
     }
@@ -84,7 +84,10 @@ pipeline {
 
                             ssh -o StrictHostKeyChecking=accept-new \
                               ec2-user@$APP_HOST \
-                              "docker compose -f '$DEPLOY_DIR/docker-compose.yml' ps"
+                              "DOCKERHUB_USER='$DOCKERHUB_USER' \
+                               IMAGE_TAG='$BUILD_NUMBER' \
+                               docker compose -f '$DEPLOY_DIR/docker-compose.yml' \
+                               ps"
                         '''
                     }
                 }
@@ -93,11 +96,35 @@ pipeline {
 
         stage('Verify Deployment') {
             steps {
-                sh '''
-                    set -eu
-                    curl --fail --retry 5 --retry-delay 3 \
-                      "http://$APP_HOST/"
-                '''
+                sshagent(credentials: ['app-server-ssh']) {
+                    withCredentials([
+                        usernamePassword(
+                            credentialsId: 'dockerhub-creds',
+                            usernameVariable: 'DOCKERHUB_USER',
+                            passwordVariable: 'DOCKERHUB_TOKEN'
+                        )
+                    ]) {
+                        sh '''
+                            set -eu
+
+                            echo "Checking application containers..."
+
+                            ssh -o StrictHostKeyChecking=accept-new \
+                              ec2-user@$APP_HOST \
+                              "DOCKERHUB_USER='$DOCKERHUB_USER' \
+                               IMAGE_TAG='$BUILD_NUMBER' \
+                               docker compose -f '$DEPLOY_DIR/docker-compose.yml' \
+                               ps"
+
+                            echo "Checking HTTP response..."
+
+                            curl --fail --retry 5 --retry-delay 3 \
+                              "http://$APP_HOST/"
+
+                            echo "Deployment verification completed."
+                        '''
+                    }
+                }
             }
         }
     }
@@ -106,6 +133,7 @@ pipeline {
         success {
             echo "Healthcare deployment succeeded: build ${BUILD_NUMBER}"
         }
+
         failure {
             echo 'Deployment failed. Review the Jenkins console output.'
         }
